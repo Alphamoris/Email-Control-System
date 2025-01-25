@@ -1,195 +1,198 @@
 # 📧 Email Control System
 
-A powerful, enterprise-grade email management system built with FastAPI and Next.js, designed to handle millions of emails efficiently while maintaining excellent IP reputation.
+<div align="center">
+
+![Email Control System](https://img.shields.io/badge/Email-Control_System-blue?style=for-the-badge&logo=gmail)
+
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
+
+A powerful, enterprise-grade email management system that handles millions of emails while maintaining excellent IP reputation.
+
+[Getting Started](#-quick-start) •
+[Features](#-key-features) •
+[Documentation](#-documentation) •
+[Tech Stack](#%EF%B8%8F-technology-stack) •
+[Contributing](#-contributing)
+
+</div>
+
+---
+
+## ✨ Why Email Control System?
+
+- 🚀 **High Performance**: Handles millions of emails efficiently
+- 🔒 **Enterprise Security**: Bank-grade security with 2FA and encryption
+- 🎯 **Smart Management**: AI-powered categorization and priority sorting
+- 📊 **Rich Analytics**: Detailed insights into email performance
+- 🔄 **Seamless Integration**: Works with Gmail, Outlook, and IMAP
+- ⚡ **Real-time Updates**: Instant notifications and live updates
+- 🛡️ **IP Protection**: Built-in safeguards for sender reputation
 
 ## 🌟 Key Features
 
-### Email Management
-- **Multi-Account Integration**: Seamless support for Gmail, Outlook, and IMAP accounts
-- **Smart Categorization**: AI-powered email categorization and priority sorting
-- **Advanced Search**: Full-text search with filters and advanced query syntax
-- **Bulk Operations**: Efficient handling of multiple emails simultaneously
-- **Email Templates**: Create and manage reusable email templates
+### 📨 Email Management
+- **Multi-Account Support**
+  - Gmail, Outlook, and IMAP integration
+  - Unified inbox across all accounts
+  - Account-specific settings and rules
+  
+- **Smart Organization**
+  - AI-powered categorization
+  - Priority inbox with smart sorting
+  - Custom folders and labels
+  - Advanced search with filters
 
-### Security & Performance
-- **IP Reputation Management**: Built-in safeguards to maintain sender reputation
-- **Rate Limiting**: Intelligent throttling to prevent account blocks
-- **Security Features**: 2FA, JWT authentication, and role-based access control
-- **Caching System**: Redis-based caching for optimal performance
+- **Bulk Operations**
+  - Mass email processing
+  - Template management
+  - Scheduled sending
+  - Batch updates
 
-### Monitoring & Analytics
-- **Real-time Monitoring**: Track email delivery, opens, and engagement
-- **Performance Metrics**: Detailed analytics on email campaigns and system performance
-- **Audit Logs**: Comprehensive logging of all system activities
-- **Health Checks**: Automated system health monitoring
+### 🔐 Security & Performance
 
-## 🛠️ Technology Stack
+- **Authentication & Authorization**
+  - Two-factor authentication (2FA)
+  - Role-based access control (RBAC)
+  - JWT with secure refresh tokens
+  - OAuth2 integration
 
-### Backend Architecture
-- **Framework**: FastAPI with Python 3.11
-- **Database**: PostgreSQL 15 with SQLAlchemy ORM
-- **Caching**: Redis 7
-- **Task Queue**: Celery with Flower monitoring
-- **Authentication**: JWT with OAuth2
-- **Email Processing**: MIME, SMTP, IMAP protocols
-- **API Docs**: OpenAPI (Swagger) & ReDoc
+- **Performance Optimization**
+  - Redis caching
+  - Connection pooling
+  - Query optimization
+  - Rate limiting
 
-### Frontend Architecture
-- **Framework**: Next.js 14 with TypeScript
-- **State Management**: Zustand & React Query
-- **UI Components**: Tailwind CSS & Headless UI
-- **Forms**: React Hook Form with Zod validation
-- **Charts**: Recharts for analytics
-- **Testing**: Jest & React Testing Library
+- **Data Protection**
+  - End-to-end encryption
+  - Data backup and recovery
+  - Audit logging
+  - GDPR compliance
 
 ## 🚀 Quick Start
 
 ### Prerequisites
+
+Make sure you have the following installed:
+
+- Python 3.11+
+- Node.js 18+
+- PostgreSQL 15+
+- Redis 7+
+- Docker (optional)
+
+### One-Click Setup
+
 ```bash
-# Required software
-Python 3.11+
-Node.js 18+
-PostgreSQL 15+
-Redis 7+
-Docker & Docker Compose (optional)
+# Clone the repository
+git clone https://github.com/yourusername/email-control-system.git
+cd email-control-system
+
+# Run setup script
+./setup.sh  # Linux/MacOS
+setup.bat   # Windows
 ```
 
-### Backend Setup
+### Manual Setup
 
-1. Create and activate virtual environment:
+<details>
+<summary>Backend Setup</summary>
+
 ```bash
-# Windows
-cd backend
+# Create virtual environment
 python -m venv venv
-venv\Scripts\activate
+source venv/bin/activate  # Linux/MacOS
+venv\Scripts\activate     # Windows
 
-# Linux/MacOS
-cd backend
-python -m venv venv
-source venv/bin/activate
-```
-
-2. Install dependencies:
-```bash
+# Install dependencies
 pip install -r requirements.txt
-pre-commit install
-```
 
-3. Configure environment:
-```bash
+# Setup environment
 cp .env.example .env
-# Edit .env with your configurations
-```
+# Edit .env with your settings
 
-4. Initialize database:
-```bash
+# Initialize database
 alembic upgrade head
-python -m app.initial_data  # Create initial data
-```
+python -m app.initial_data
 
-5. Start the backend:
-```bash
-# Development
+# Start server
 uvicorn app.main:app --reload
-
-# Production
-gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker
 ```
+</details>
 
-### Frontend Setup
+<details>
+<summary>Frontend Setup</summary>
 
-1. Install dependencies:
 ```bash
+# Install dependencies
 cd frontend
 npm install
-```
 
-2. Configure environment:
-```bash
+# Setup environment
 cp .env.example .env.local
-# Edit .env.local with your configurations
-```
+# Edit .env.local with your settings
 
-3. Start the frontend:
-```bash
-# Development
+# Start development server
 npm run dev
-
-# Production
-npm run build
-npm start
 ```
+</details>
 
-### Docker Deployment
+<details>
+<summary>Docker Setup</summary>
 
 ```bash
-# Build and start all services
+# Build and start services
 docker-compose up -d
 
 # View logs
 docker-compose logs -f
 
 # Scale workers
-docker-compose up -d --scale celery_worker=3
+docker-compose up -d --scale worker=3
 ```
+</details>
 
-## 📊 System Architecture
+## 📚 Documentation
 
-```mermaid
-graph TD
-    A[Client] --> B[Next.js Frontend]
-    B --> C[FastAPI Backend]
-    C --> D[PostgreSQL]
-    C --> E[Redis Cache]
-    C --> F[Celery Workers]
-    F --> G[Email Providers]
-    F --> H[Background Tasks]
-```
+- [API Documentation](http://localhost:8000/docs)
+- [Frontend Documentation](http://localhost:3000/docs)
+- [Architecture Overview](./docs/architecture.md)
+- [Development Guide](./docs/development.md)
+- [Deployment Guide](./docs/deployment.md)
+- [Security Guide](./docs/security.md)
 
-## 🧪 Testing
+## 🛠️ Technology Stack
 
-### Backend Tests
-```bash
-# Run all tests
-pytest
+<details>
+<summary>Backend Stack</summary>
 
-# Run with coverage
-pytest --cov=app
+- **Core**: FastAPI, Python 3.11
+- **Database**: PostgreSQL 15, SQLAlchemy, Alembic
+- **Caching**: Redis 7
+- **Queue**: Celery, RabbitMQ
+- **Security**: JWT, OAuth2, Passlib
+- **Testing**: Pytest, Coverage
+</details>
 
-# Run specific test categories
-pytest -m unit  # Unit tests
-pytest -m integration  # Integration tests
-pytest -m e2e  # End-to-end tests
-```
+<details>
+<summary>Frontend Stack</summary>
 
-### Frontend Tests
-```bash
-# Run all tests
-npm test
-
-# Run with coverage
-npm test -- --coverage
-
-# Run in watch mode
-npm test -- --watch
-```
-
-## 📈 Monitoring & Maintenance
-
-### Health Checks
-- Backend: `http://localhost:8000/health`
-- Frontend: `http://localhost:3000/api/health`
-- Database: `http://localhost:8000/health/db`
-- Redis: `http://localhost:8000/health/redis`
-
-### Monitoring Tools
-- Celery Flower: `http://localhost:5555`
-- Prometheus Metrics: `http://localhost:8000/metrics`
-- Application Logs: `docker-compose logs -f`
+- **Core**: Next.js 14, TypeScript
+- **State**: Zustand, React Query
+- **UI**: Tailwind CSS, Headless UI
+- **Forms**: React Hook Form, Zod
+- **Testing**: Jest, Testing Library
+</details>
 
 ## 🔧 Configuration
 
-The system can be configured using environment variables. Key configurations:
+### Environment Variables
+
+<details>
+<summary>Backend Configuration</summary>
 
 ```env
 # Application
@@ -201,81 +204,59 @@ SECRET_KEY=your-secret-key
 DATABASE_URL=postgresql://user:pass@localhost:5432/dbname
 
 # Redis
-REDIS_URL=redis://localhost:6379/0
+REDIS_URL=redis://localhost:6379
 
-# Email Limits
-MAX_EMAILS_PER_DAY=1000
-MAX_RECIPIENTS_PER_EMAIL=50
+# Email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+```
+</details>
+
+<details>
+<summary>Frontend Configuration</summary>
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_GA_ID=your-ga-id
+```
+</details>
+
+## 🧪 Testing
+
+```bash
+# Backend tests
+pytest                 # Run all tests
+pytest --cov=app      # With coverage
+pytest -m unit        # Unit tests only
+
+# Frontend tests
+npm test              # Run all tests
+npm test -- --watch   # Watch mode
 ```
 
-## 📚 API Documentation
+## 📈 Monitoring
 
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-- OpenAPI Schema: `http://localhost:8000/openapi.json`
-
-## 🔐 Security Features
-
-- JWT Authentication
-- OAuth2 Integration
-- Rate Limiting
-- CORS Protection
-- SQL Injection Prevention
-- XSS Protection
-- CSRF Protection
-- Security Headers
-- Input Validation
-- Output Sanitization
-
-## 🌍 Scaling Considerations
-
-- Horizontal Scaling
-  - Stateless API Design
-  - Redis for Session Storage
-  - Load Balancing Support
-  
-- Performance Optimization
-  - Query Optimization
-  - Caching Strategies
-  - Background Processing
-  - Connection Pooling
+- **Health Checks**: `http://localhost:8000/health`
+- **API Metrics**: `http://localhost:8000/metrics`
+- **Task Queue**: `http://localhost:5555` (Flower)
+- **Logs**: `docker-compose logs -f`
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create your feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-### Commit Guidelines
-```
-feat: Add new feature
-fix: Bug fix
-docs: Update documentation
-style: Code style update
-refactor: Code refactoring
-test: Add tests
-chore: Update build tasks
-```
-
-## 📝 License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👥 Support
-
-- Documentation: [docs/](docs/)
-- Issue Tracker: [GitHub Issues](https://github.com/yourusername/email-control-system/issues)
-- Security: [SECURITY.md](SECURITY.md)
-- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
-
 ## 🙏 Acknowledgments
 
-- FastAPI
-- Next.js
-- SQLAlchemy
-- And all other open-source libraries used in this project
-
----
-Built with ❤️ by Your Team
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Next.js](https://nextjs.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [PostgreSQL](https://www.postgresql.org/)
+- [Redis](https://redis.io/)
