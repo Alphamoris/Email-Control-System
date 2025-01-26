@@ -10,9 +10,20 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/email_control
       - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=92c1f2b2-3e2f-4a1e-8a2e-2b2f3e4a1e2e
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - ALGORITHM=HS256
+      - API_V1_STR=/api/v1
+      - PROJECT_NAME=Email Control System
+      - ENVIRONMENT=development
+      - FRONTEND_URL=http://localhost:3000
+      - BACKEND_CORS_ORIGINS=["http://localhost:3000","http://localhost:8000"]
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - ./backend:/app
     networks:
@@ -28,8 +39,12 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
     volumes:
       - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
     networks:
       - app-network
+    depends_on:
+      - backend
 
   db:
     image: postgres:15-alpine
@@ -43,6 +58,11 @@ services:
       - "5432:5432"
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -52,6 +72,11 @@ services:
       - redis_data:/data
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   celery_worker:
     build:
@@ -61,8 +86,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/email_control
       - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=92c1f2b2-3e2f-4a1e-8a2e-2b2f3e4a1e2e
     depends_on:
-      - db
+      - backend
       - redis
     volumes:
       - ./backend:/app

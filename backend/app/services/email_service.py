@@ -1,9 +1,10 @@
 from typing import List, Optional, Dict, Any, Tuple
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy import and_, or_, desc, func
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.exc import SQLAlchemyError
 from app.models.email import Email
-from app.models.email_account import EmailAccount
+from app.models.email_account import EmailAccount, AccountType
 from app.schemas.email import EmailCreate, EmailUpdate, EmailFilter
 from app.services.storage_service import StorageService
 from app.services.gmail_service import GmailService
@@ -15,7 +16,9 @@ import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+from app.core.exceptions import EmailNotFoundError, StorageError
 import logging
+from typing import AsyncGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -34,130 +37,220 @@ class EmailService:
         page_size: int = 20
     ) -> Tuple[List[Email], int]:
         """List emails with filtering and pagination"""
-        query = self.db.query(Email).join(EmailAccount).filter(
-            EmailAccount.user_id == user_id
-        )
-
-        # Apply filters
-        if filter_params.folder:
-            query = query.filter(Email.folder == filter_params.folder)
-        if filter_params.is_read is not None:
-            query = query.filter(Email.is_read == filter_params.is_read)
-        if filter_params.is_starred is not None:
-            query = query.filter(Email.is_starred == filter_params.is_starred)
-        if filter_params.account_id:
-            query = query.filter(Email.account_id == filter_params.account_id)
-        if filter_params.labels:
-            query = query.filter(Email.labels.overlap(filter_params.labels))
-        if filter_params.from_date:
-            query = query.filter(Email.received_at >= filter_params.from_date)
-        if filter_params.to_date:
-            query = query.filter(Email.received_at <= filter_params.to_date)
-        if filter_params.has_attachments is not None:
-            if filter_params.has_attachments:
-                query = query.filter(Email.attachments != None)
-            else:
-                query = query.filter(Email.attachments == None)
-        
-        # Apply search if provided
-        if filter_params.search:
-            search_filter = or_(
-                Email.subject.ilike(f"%{filter_params.search}%"),
-                Email.content.ilike(f"%{filter_params.search}%"),
-                Email.sender.ilike(f"%{filter_params.search}%"),
-                func.array_to_string(Email.recipients, ',').ilike(f"%{filter_params.search}%")
-            )
-            query = query.filter(search_filter)
-
-        # Get total count
-        total = query.count()
-
-        # Apply sorting
-        if filter_params.sort_desc:
-            query = query.order_by(desc(getattr(Email, filter_params.sort_by)))
-        else:
-            query = query.order_by(getattr(Email, filter_params.sort_by))
-
-        # Apply pagination
-        query = query.offset((page - 1) * page_size).limit(page_size)
-
-        return query.all(), total
-
-    async def send_email(self, account: EmailAccount, email_data: EmailCreate) -> Email:
-        """Send email using the appropriate service"""
         try:
-            # Check rate limit
-            if not await self.check_rate_limit(account.user_id):
-                raise HTTPException(
-                    status_code=429,
-                    detail=f"Rate limit exceeded. Maximum {settings.RATE_LIMIT_PER_USER} emails per hour."
+            query = self.db.query(Email).join(EmailAccount).filter(
+                EmailAccount.user_id == user_id
+            ).options(joinedload(Email.attachments))
+
+            # Apply filters
+            if filter_params.folder:
+                query = query.filter(Email.folder == filter_params.folder)
+            if filter_params.is_read is not None:
+                query = query.filter(Email.is_read == filter_params.is_read)
+            if filter_params.is_starred is not None:
+                query = query.filter(Email.is_starred == filter_params.is_starred)
+            if filter_params.account_id:
+                query = query.filter(Email.account_id == filter_params.account_id)
+            if filter_params.labels:
+                query = query.filter(Email.labels.overlap(filter_params.labels))
+            if filter_params.search:
+                search_term = f"%{filter_params.search}%"
+                query = query.filter(
+                    or_(
+                        Email.subject.ilike(search_term),
+                        Email.content.ilike(search_term),
+                        Email.sender.ilike(search_term),
+                    )
                 )
 
-            # Process attachments
-            attachments = []
+            # Get total count
+            total = query.count()
+
+            # Apply sorting and pagination
+            query = query.order_by(
+                desc(Email.received_at) if filter_params.sort_desc else Email.received_at
+            )
+            query = query.offset((page - 1) * page_size).limit(page_size)
+
+            return query.all(), total
+
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in list_emails: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch emails"
+            )
+
+    async def send_email(self, user_id: int, email_data: EmailCreate) -> Email:
+        """Send a new email"""
+        try:
+            # Get the email account
+            account = self.db.query(EmailAccount).filter(
+                and_(
+                    EmailAccount.id == email_data.account_id,
+                    EmailAccount.user_id == user_id
+                )
+            ).first()
+
+            if not account:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Email account not found"
+                )
+
+            # Create email object
+            email = Email(
+                account_id=account.id,
+                subject=email_data.subject,
+                recipients=email_data.recipients,
+                cc=email_data.cc,
+                bcc=email_data.bcc,
+                content=email_data.content,
+                html_content=email_data.html_content,
+                priority=email_data.priority or 0,
+                folder="sent",
+                received_at=datetime.utcnow(),
+                is_read=True,
+            )
+
+            # Handle attachments
             if email_data.attachments:
-                attachments = await self.storage.get_attachments(email_data.attachments)
+                for attachment_id in email_data.attachments:
+                    attachment = self.storage.get_attachment(attachment_id)
+                    if attachment:
+                        email.attachments.append(attachment)
 
-            # Send email using appropriate service
-            if account.account_type == "gmail":
-                message_id = await self.gmail_service.send_email(account, email_data, attachments)
-            elif account.account_type == "outlook":
-                message_id = await self.outlook_service.send_email(account, email_data, attachments)
+            # Send email based on account type
+            if account.account_type == AccountType.GMAIL:
+                await self.gmail_service.send_email(account, email)
+            elif account.account_type == AccountType.OUTLOOK:
+                await self.outlook_service.send_email(account, email)
             else:
-                message_id = await self._send_smtp_email(account, email_data, attachments)
+                await self._send_smtp_email(account, email)
 
-            # Save sent email
-            email = self._save_sent_email(account, email_data, message_id)
-            
-            # Update account stats
-            account.last_sent_at = datetime.utcnow()
-            account.total_sent += 1
+            # Save to database
+            self.db.add(email)
             self.db.commit()
+            self.db.refresh(email)
 
             return email
 
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Database error in send_email: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to send email"
+            )
+        except StorageError as e:
+            logger.error(f"Storage error in send_email: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to process attachments"
+            )
         except Exception as e:
-            logger.error(f"Failed to send email: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error(f"Error in send_email: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to send email"
+            )
 
-    async def fetch_emails(self, account: EmailAccount, sync_all: bool = False) -> Dict[str, Any]:
-        """Fetch emails from the email provider"""
+    async def fetch_new_emails(
+        self,
+        user_id: int,
+        account_id: int,
+        sync_all: bool = False
+    ) -> AsyncGenerator[Email, None]:
+        """Fetch new emails from the provider"""
         try:
+            account = self.db.query(EmailAccount).filter(
+                and_(
+                    EmailAccount.id == account_id,
+                    EmailAccount.user_id == user_id
+                )
+            ).first()
+
+            if not account:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Email account not found"
+                )
+
             # Update sync status
             account.sync_status = "syncing"
-            account.error_message = None
             self.db.commit()
 
-            # Fetch emails using appropriate service
-            if account.account_type == "gmail":
-                result = await self.gmail_service.fetch_emails(account, sync_all)
-            elif account.account_type == "outlook":
-                result = await self.outlook_service.fetch_emails(account, sync_all)
-            else:
-                result = await self._fetch_imap_emails(account, sync_all)
+            try:
+                if account.account_type == AccountType.GMAIL:
+                    async for email in self.gmail_service.fetch_emails(account, sync_all):
+                        yield email
+                elif account.account_type == AccountType.OUTLOOK:
+                    async for email in self.outlook_service.fetch_emails(account, sync_all):
+                        yield email
 
-            # Update account sync info
-            account.last_sync_at = datetime.utcnow()
-            account.sync_status = "success"
-            self.db.commit()
+                # Update sync status
+                account.sync_status = "success"
+                account.last_sync_at = datetime.utcnow()
+                self.db.commit()
 
-            return result
+            except Exception as e:
+                account.sync_status = "failed"
+                account.error_message = str(e)
+                self.db.commit()
+                raise
 
-        except Exception as e:
-            logger.error(f"Failed to fetch emails: {str(e)}")
-            account.sync_status = "error"
-            account.error_message = str(e)
-            self.db.commit()
-            raise HTTPException(status_code=500, detail=str(e))
+        except SQLAlchemyError as e:
+            logger.error(f"Database error in fetch_new_emails: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch new emails"
+            )
+
+    async def _send_smtp_email(self, account: EmailAccount, email: Email) -> None:
+        """Send email using SMTP"""
+        if not account.smtp_host or not account.smtp_port:
+            raise ValueError("SMTP configuration missing")
+
+        message = MIMEMultipart()
+        message["From"] = account.email
+        message["To"] = ", ".join(email.recipients)
+        if email.cc:
+            message["Cc"] = ", ".join(email.cc)
+        message["Subject"] = email.subject or ""
+
+        # Add body
+        if email.html_content:
+            message.attach(MIMEText(email.html_content, "html"))
+        else:
+            message.attach(MIMEText(email.content or "", "plain"))
+
+        # Add attachments
+        for attachment in email.attachments:
+            with open(attachment.storage_path, "rb") as f:
+                part = MIMEApplication(f.read(), _subtype=attachment.content_type.split("/")[1])
+                part.add_header(
+                    "Content-Disposition",
+                    "attachment",
+                    filename=attachment.filename
+                )
+                message.attach(part)
+
+        # Send email
+        async with aiosmtplib.SMTP(
+            hostname=account.smtp_host,
+            port=account.smtp_port,
+            use_tls=True
+        ) as smtp:
+            await smtp.send_message(message)
 
     async def update_email(self, email: Email, update_data: EmailUpdate) -> Email:
         """Update email properties"""
         try:
             # Update remote email if needed
             if update_data.folder and update_data.folder != email.folder:
-                if email.account.account_type == "gmail":
+                if email.account.account_type == AccountType.GMAIL:
                     await self.gmail_service.move_email(email, update_data.folder)
-                elif email.account.account_type == "outlook":
+                elif email.account.account_type == AccountType.OUTLOOK:
                     await self.outlook_service.move_email(email, update_data.folder)
                 else:
                     await self._move_imap_email(email, update_data.folder)
@@ -174,16 +267,16 @@ class EmailService:
 
         except Exception as e:
             logger.error(f"Failed to update email: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     async def delete_email(self, email: Email, permanent: bool = False) -> None:
         """Delete an email"""
         try:
             if permanent:
                 # Delete from remote
-                if email.account.account_type == "gmail":
+                if email.account.account_type == AccountType.GMAIL:
                     await self.gmail_service.delete_email(email)
-                elif email.account.account_type == "outlook":
+                elif email.account.account_type == AccountType.OUTLOOK:
                     await self.outlook_service.delete_email(email)
                 else:
                     await self._delete_imap_email(email)
@@ -203,7 +296,7 @@ class EmailService:
 
         except Exception as e:
             logger.error(f"Failed to delete email: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     async def perform_bulk_action(self, user_id: int, action_data: EmailBulkAction) -> Dict[str, Any]:
         """Perform bulk actions on emails"""
@@ -273,52 +366,6 @@ class EmailService:
         self.db.commit()
         self.db.refresh(email)
         return email
-
-    async def _send_smtp_email(
-        self,
-        account: EmailAccount,
-        email_data: EmailCreate,
-        attachments: List[Dict[str, Any]]
-    ) -> str:
-        """Send email using SMTP"""
-        message = MIMEMultipart("alternative")
-        message["Subject"] = email_data.subject
-        message["From"] = account.email
-        message["To"] = ", ".join(email_data.recipients)
-        
-        if email_data.cc:
-            message["Cc"] = ", ".join(email_data.cc)
-        if email_data.bcc:
-            message["Bcc"] = ", ".join(email_data.bcc)
-
-        # Add text content
-        if email_data.content:
-            message.attach(MIMEText(email_data.content, "plain"))
-        
-        # Add HTML content if provided
-        if email_data.html_content:
-            message.attach(MIMEText(email_data.html_content, "html"))
-
-        # Add attachments
-        for attachment in attachments:
-            with open(attachment["path"], "rb") as f:
-                part = MIMEApplication(f.read(), _subtype=attachment["content_type"].split("/")[1])
-                part.add_header(
-                    "Content-Disposition",
-                    "attachment",
-                    filename=attachment["filename"]
-                )
-                message.attach(part)
-
-        try:
-            smtp = aiosmtplib.SMTP(hostname=account.smtp_host, port=account.smtp_port, use_tls=True)
-            await smtp.connect()
-            await smtp.login(account.email, account.refresh_token)
-            await smtp.send_message(message)
-            await smtp.quit()
-            return f"smtp_{datetime.utcnow().timestamp()}"
-        except Exception as e:
-            raise Exception(f"SMTP error: {str(e)}")
 
     async def _fetch_imap_emails(self, account: EmailAccount, sync_all: bool = False) -> Dict[str, Any]:
         """Fetch emails using IMAP"""

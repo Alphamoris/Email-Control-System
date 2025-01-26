@@ -62,36 +62,38 @@ async def list_emails(
             page=page,
             page_size=page_size
         )
-        
-        # Trigger background sync if needed
-        if len(emails) == 0 and page == 1:
-            background_tasks.add_task(
-                email_service.background_sync,
-                user_id=current_user.id,
-                account_id=account_id
-            )
-        
+
+        # Start background sync if needed
+        if not account_id:
+            for account in current_user.email_accounts:
+                if account.is_active:
+                    background_tasks.add_task(
+                        email_service.fetch_new_emails,
+                        user_id=current_user.id,
+                        account_id=account.id
+                    )
+
         return {
-            "data": emails,
+            "items": emails,
             "total": total,
             "page": page,
             "page_size": page_size,
             "total_pages": (total + page_size - 1) // page_size
         }
+
     except RateLimitExceededError as e:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(e),
-            headers={"Retry-After": str(e.retry_after)}
+            detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Error listing emails: {str(e)}")
+        logger.error(f"Error in list_emails: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error fetching emails"
+            detail="Failed to fetch emails"
         )
 
-@router.post("/send", response_model=EmailResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/send", response_model=EmailResponse)
 async def send_email(
     email_data: EmailCreate,
     db: Session = Depends(get_db),
@@ -106,22 +108,17 @@ async def send_email(
             email_data=email_data
         )
         return email
+
     except RateLimitExceededError as e:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(e),
-            headers={"Retry-After": str(e.retry_after)}
-        )
-    except InvalidEmailError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Error sending email: {str(e)}")
+        logger.error(f"Error in send_email: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error sending email"
+            detail="Failed to send email"
         )
 
 @router.post("/attachments", response_model=EmailAttachment)
@@ -133,28 +130,66 @@ async def upload_attachment(
     """Upload email attachment"""
     try:
         await rate_limiter.check_rate_limit(current_user.id, "upload_attachment")
+        
+        # Validate file size
         if file.size > settings.MAX_ATTACHMENT_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File size exceeds maximum allowed size of {settings.MAX_ATTACHMENT_SIZE} bytes"
+                detail="File too large"
             )
-            
-        email_service = EmailService(db)
-        attachment = await email_service.upload_attachment(
-            user_id=current_user.id,
-            file=file
-        )
+
+        # Validate file type
+        if file.content_type not in settings.ALLOWED_ATTACHMENT_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Unsupported file type"
+            )
+
+        storage_service = StorageService()
+        attachment = await storage_service.store_attachment(file)
         return attachment
+
     except RateLimitExceededError as e:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(e),
-            headers={"Retry-After": str(e.retry_after)}
+            detail=str(e)
         )
     except StorageError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error in upload_attachment: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to upload attachment"
+        )
+
+@router.post("/sync")
+async def sync_emails(
+    background_tasks: BackgroundTasks,
+    account_id: int,
+    sync_all: bool = False,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Start email synchronization"""
+    try:
+        email_service = EmailService(db)
+        background_tasks.add_task(
+            email_service.fetch_new_emails,
+            user_id=current_user.id,
+            account_id=account_id,
+            sync_all=sync_all
+        )
+        return {"message": "Sync started"}
+
+    except Exception as e:
+        logger.error(f"Error in sync_emails: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start sync"
         )
 
 @router.post("/fetch")

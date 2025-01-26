@@ -14,24 +14,24 @@ class Base:
     # Generate __tablename__ automatically
     @declared_attr
     def __tablename__(cls) -> str:
+        """Generate tablename from class name."""
         return cls.__name__.lower()
     
     # Common columns for all models
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    
-    def to_dict(self) -> dict:
-        """Convert model instance to dictionary."""
-        return {
-            column.name: getattr(self, column.name)
-            for column in self.__table__.columns
-        }
-    
-    def update(self, **kwargs) -> None:
-        """Update model instance with given attributes."""
-        for key, value in kwargs.items():
-            if hasattr(self, key):
+
+    def __repr__(self) -> str:
+        """String representation of the model."""
+        attrs = []
+        for col in self.__table__.columns:
+            value = getattr(self, col.name)
+            if isinstance(value, datetime):
+                value = value.isoformat()
+            attrs.append(f"{col.name}={value!r}")
+        return f"{self.__class__.__name__}({', '.join(attrs)})"
+
                 setattr(self, key, value)
     
     @classmethod
