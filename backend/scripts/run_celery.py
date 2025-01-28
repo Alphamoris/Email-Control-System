@@ -10,6 +10,7 @@ def create_celery() -> Celery:
         backend=settings.CELERY_RESULT_BACKEND,
         include=["app.tasks"],
     )
+    '''celery Intialization'''
 
     celery.conf.update(
         task_serializer="json",
