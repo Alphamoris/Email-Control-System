@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def run_server(host: str = "0.0.0.0", port: int = 8000, reload: bool = True) -> None:
-    """Run the development server with hot reload."""
+    """Run the development server with hot reload. There is a differnece"""
     try:
         logger.info(f"Starting development server at http://{host}:{port}")
         uvicorn.run(
