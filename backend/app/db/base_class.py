@@ -36,7 +36,7 @@ class Base:
     
     @classmethod
     def from_dict(cls, data: dict) -> Any:
-        """Create model instance from dictionary."""
+        """Create model instance from dictionary for the system."""
         return cls(**{
             key: value for key, value in data.items()
             if hasattr(cls, key)
