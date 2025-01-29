@@ -8,6 +8,8 @@ from app.models.folder import Folder
 from app.models.label import Label
 from app.models.contact import Contact
 
+
+
 # Make sure all models are imported before initializing Alembic
 __all__ = [
     "Base",
