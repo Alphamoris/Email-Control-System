@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def init_db(db: Session) -> None:
     """Initialize database with required initial data."""
     try:
-        # Create super user if it doesn't exist
+        # Create super user if it doesn't exist already 
         user = db.query(User).filter(User.email == settings.FIRST_SUPERUSER).first()
         if not user:
             logger.info(f"Creating superuser: {settings.FIRST_SUPERUSER}")
