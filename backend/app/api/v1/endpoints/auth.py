@@ -12,6 +12,8 @@ from app.core.exceptions import AuthenticationError, UserNotFoundError
 import logging
 
 logger = logging.getLogger(__name__)
+
+
 router = APIRouter()
 
 @router.post("/login", response_model=Token)
