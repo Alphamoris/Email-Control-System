@@ -1,6 +1,5 @@
 
 import uvicorn
-
 import argparse
 import logging
 from app.core.config import settings
